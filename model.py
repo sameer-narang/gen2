@@ -10,11 +10,12 @@ from dateutil.relativedelta import relativedelta
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import GridSearchCV
 
-#NA_FILL_VAL = 1e-9
-NA_FILL_VAL = None
+NA_FILL_VAL = 1e-9
+#NA_FILL_VAL = None
 
 DATE_FMT = "%m/%d/%Y"
 suffix = "_ratio"
+suffix2 = "_ratio_annual"
 
 def summarize (y_act, y_pred, info):
         print (info + 'MSE: ' + str (np.mean ((y_act-y_pred)**2)))
@@ -68,6 +69,7 @@ y_train = df [(df ['Seq'] >= 10958) & (df ['Seq'] < 23376)] ['gdp_label']
 y_val = df [(df ['Seq'] >= 23376) & (df ['Seq'] < 24106) ] ['gdp_label']
 y_test = df [(df ['Seq'] >= 24106) & (df ['Seq'] < 24838) ] ['gdp_label']
 
+'''
 ts = ['GTII10 Govt','DXY Curncy','VIX Index','SPX Index','DOW US Equity','NDX Index', \
         'AUDUSD Curncy', 'USDCAD Curncy' ,'USDJPY Curncy', 'GBPUSD Curncy', 'USDMXN Curncy','USDCNY Curncy', \
         'USGG10YR Index', 'FDTR Index', 'MPMIUSMA Index', 'NAPMPMI Index', 'NAPMPRIC Index', \
@@ -92,6 +94,23 @@ ts = ['GTII10 Govt','DXY Curncy','VIX Index','SPX Index','DOW US Equity','NDX In
         'GDP PIQQ Index', 'GDPCPCEC Index', 'PITLCHNG Index', 'PCE CRCH Index', 'PCE CHNC Index', \
         'PCE DEFM Index', 'PCE DEFY Index', 'PCE CMOM Index', 'PCE CYOY Index', 'DFEDGBA Index', \
         'ECI SA% Index', 'SPCS20SM Index', 'SPCS20Y% Index', 'CHPMINDX Index', 'CONCCONF Index']
+'''
+
+ts = ['SPX Index', 'DXY Curncy', 'DOW US Equity', 'AUDUSD Curncy', 'USDCAD Curncy', \
+             'USDJPY Curncy', 'GBPUSD Curncy', 'USDMXN Curncy', 'USDCNY Curncy', 'USGG10YR Index', \
+             'FDTR Index', 'NAPMPMI Index', 'NAPMPRIC Index', 'NAPMNEWO Index', 'NAPMEMPL Index', \
+             'SAARTOTL Index', 'INJCJC Index', 'INJCSP Index', 'TMNOCHNG Index', 'DGNOXTCH Index', \
+             'CGNOXAI% Index', 'NFP TCH Index', 'USMMMNCH Index', 'NFP PCH Index', 'NFP TCH Index', \
+             'PRUSTOT Index', 'CICRTOT Index', 'SBOITOTL Index', 'CPI CHNG Index', 'CPUPXCHG Index', \
+             'CPI YOY Index', 'CPI XYOY Index', 'CPURNSA Index', 'CONSSENT Index', 'CONSCURR Index', \
+             'CONSEXP Index', 'CONSPXMD Index', 'MTIBCHNG Index', 'IMP1YOY% Index', 'IP  CHNG Index', \
+             'CPTICHNG Index', 'IPMGCHNG Index', 'FRNTTNET Index', 'NHSPSTOT Index', 'NHCHSTCH Index', \
+             'NHSPATOT Index', 'NHCHATCH Index', 'OUTFGAF Index', 'LEI CHNG Index', 'CFNAI Index', \
+             'NHSLTOT Index', 'GDPCTOT% Index', 'GDP PIQQ Index', 'GDPCPCEC Index', 'PITLCHNG Index', \
+             'PCE DEFM Index', 'PCE DEFY Index', 'PCE CMOM Index', 'PCE CYOY Index', 'CHPMINDX Index', \
+             'CONCCONF Index'
+     ]
+
 
 '''
 ts = [
@@ -110,6 +129,9 @@ for s in ts:
         df [s + suffix] = np.nan
         features.append (s + suffix)
         f_cols [s + suffix] = []
+        df [s + suffix2] = np.nan
+        features.append (s + suffix2)
+        f_cols [s + suffix2] = []
 
 for s in ts:
         f_cols ['Date'] = []
@@ -135,6 +157,32 @@ for s in ts:
                 #pd.DataFrame (df [[s + suffix], 'Date']).to_csv (s + suffix + '.csv', index=False)
                 pd.DataFrame.from_dict ({'Date': f_cols ['Date'], s + suffix: f_cols [s + suffix]}).to_csv (s + suffix + '.csv', index=False)
                 df [s + suffix] = f_cols [s + suffix]
+
+        f_cols ['Date'] = []
+        if os.path.isfile (s + suffix2 + '.csv'):
+                tmp_df = pd.read_csv (s + suffix2 + '.csv')
+                df [s + suffix2] = tmp_df [s + suffix2]
+        else:
+                #import pdb; pdb.set_trace ()
+                for i, row in df.iterrows():
+                        running_avg_ratio = np.nan
+                        y1 = row ['Date'] + relativedelta (years=-1)
+                        y2 = row ['Date'] + relativedelta (years=-2)
+                        if "%" in s:
+                                running_avg_ratio = np.nanmean (df [(df ['Date'] >= y1) & (df ['Date'] < row ['Date'])] [s]) - \
+                                                np.nanmean (df [(df ['Date'] >= y2) & (df ['Date'] < y1)] [s])
+                        else:
+                                running_avg_ratio = np.nanmean (df [(df ['Date'] >= y1) & (df ['Date'] < row ['Date'])] [s]) * 1000/ \
+                                                np.nanmean (df [(df ['Date'] >= y2) & (df ['Date'] < y1)] [s])
+                        if np.isfinite (running_avg_ratio):
+                                #df.set_value(i, s + suffix, running_avg_ratio)
+                                f_cols [s + suffix2].append (running_avg_ratio)
+                        else:
+                                f_cols [s + suffix2].append (np.nan)
+                        f_cols ['Date'].append (row ['Date'])
+                #pd.DataFrame (df [[s + suffix], 'Date']).to_csv (s + suffix + '.csv', index=False)
+                pd.DataFrame.from_dict ({'Date': f_cols ['Date'], s + suffix2: f_cols [s + suffix2]}).to_csv (s + suffix2 + '.csv', index=False)
+                df [s + suffix2] = f_cols [s + suffix2]
 
 #s = 'GTII10 Govt_ratio'
 #df = df.drop (['index'], axis=1)
