@@ -20,6 +20,17 @@ def summarize (y_act, y_pred, info):
         print (info + 'MSE: ' + str (np.mean ((y_act-y_pred)**2)))
         print (info + 'MAD: ' + str (np.mean (np.fabs(y_act-y_pred))))
 
+def eval (mdl2):
+        mdl2.fit (X_train, y_train)
+
+        train_preds2 = mdl2.predict (X_train)
+        val_preds2 = mdl2.predict (X_val)
+        test_preds2 = mdl2.predict (X_test)
+
+        summarize (y_train, train_preds2, 'Training')
+        summarize (y_val, val_preds2, 'Validation')
+        summarize (y_test, test_preds2, 'Test')
+
 def benchmark (mdl, features):
         bm_df = pd.read_csv ('benchmark_inputs.csv')
         y_preds = mdl.predict (bm_df [features])
@@ -46,7 +57,7 @@ df ['Date'] = df ['Date'].apply (datetime.datetime.strptime, args=(DATE_FMT,))
 df ['prev_qtr'] = df ['prev_qtr'].apply (datetime.datetime.strptime, args=(DATE_FMT,))
 df ['next_qtr'] = df ['next_qtr'].apply (datetime.datetime.strptime, args=(DATE_FMT,))
 df ['prev_qtr_start'] = df ['prev_qtr_start'].apply (datetime.datetime.strptime, args=(DATE_FMT,))
-df = df [df ['Seq'] > 10000]
+#df = df [df ['Seq'] > 10000].reset_index ()
 
 '''
 y_train = df [(df ['Seq'] >= 10958) & (df ['Seq'] < 22646)] ['gdp_label']
@@ -56,7 +67,6 @@ y_test = df [(df ['Seq'] >= 24106) & (df ['Seq'] < 24838) ] ['gdp_label']
 y_train = df [(df ['Seq'] >= 10958) & (df ['Seq'] < 23376)] ['gdp_label']
 y_val = df [(df ['Seq'] >= 23376) & (df ['Seq'] < 24106) ] ['gdp_label']
 y_test = df [(df ['Seq'] >= 24106) & (df ['Seq'] < 24838) ] ['gdp_label']
-
 
 ts = ['GTII10 Govt','DXY Curncy','VIX Index','SPX Index','DOW US Equity','NDX Index', \
         'AUDUSD Curncy', 'USDCAD Curncy' ,'USDJPY Curncy', 'GBPUSD Curncy', 'USDMXN Curncy','USDCNY Curncy', \
@@ -87,34 +97,54 @@ ts = ['GTII10 Govt','DXY Curncy','VIX Index','SPX Index','DOW US Equity','NDX In
 ts = [
                 'GTII10 Govt'
                 ]
+
 '''
 features = [
                         'EHGDUS Index',
                         'days_to_go',
                         ]
 
+f_cols = {}
+
 for s in ts:
         df [s + suffix] = np.nan
         features.append (s + suffix)
+        f_cols [s + suffix] = []
 
 for s in ts:
+        f_cols ['Date'] = []
         if os.path.isfile (s + suffix + '.csv'):
                 tmp_df = pd.read_csv (s + suffix + '.csv')
                 df [s + suffix] = tmp_df [s + suffix]
         else:
+                #import pdb; pdb.set_trace ()
                 for i, row in df.iterrows():
                         running_avg_ratio = np.nan
                         if "%" in s:
                                 running_avg_ratio = np.nanmean (df [(df ['Date'] > row ['prev_qtr']) & (df ['Date'] <= row ['next_qtr'])] [s]) - \
-                                                np.nanmean (df [(df ['Date'] >= row ['prev_qtr_start']) & (df ['Date'] <= row ['prev_qtr'])] [s])
+                                                np.nanmean (df [(df ['Date'] >= row ['prev_qtr_start']) & (df ['Date'] <= row ['Date'])] [s])
                         else:
-                                running_avg_ratio = np.nanmean (df [(df ['Date'] > row ['prev_qtr']) & (df ['Date'] <= row ['next_qtr'])] [s]) * 1000/ \
+                                running_avg_ratio = np.nanmean (df [(df ['Date'] > row ['prev_qtr']) & (df ['Date'] <= row ['Date'])] [s]) * 1000/ \
                                                 np.nanmean (df [(df ['Date'] >= row ['prev_qtr_start']) & (df ['Date'] <= row ['prev_qtr'])] [s])
                         if np.isfinite (running_avg_ratio):
-                                df.set_value(i, s + suffix, running_avg_ratio)
-                pd.DataFrame (df [s + suffix]).to_csv (s + suffix + '.csv')
+                                #df.set_value(i, s + suffix, running_avg_ratio)
+                                f_cols [s + suffix].append (running_avg_ratio)
+                        else:
+                                f_cols [s + suffix].append (np.nan)
+                        f_cols ['Date'].append (row ['Date'])
+                #pd.DataFrame (df [[s + suffix], 'Date']).to_csv (s + suffix + '.csv', index=False)
+                pd.DataFrame.from_dict ({'Date': f_cols ['Date'], s + suffix: f_cols [s + suffix]}).to_csv (s + suffix + '.csv', index=False)
+                df [s + suffix] = f_cols [s + suffix]
 
-df.to_csv ('data_new.csv')
+#s = 'GTII10 Govt_ratio'
+#df = df.drop (['index'], axis=1)
+#df [s] = f_cols [s]
+f_df = pd.DataFrame.from_dict (f_cols)
+f_df.to_csv ('data_new.csv', index=False)
+
+#df = pd.concat ([df, f_df], axis=1)
+#df = df.merge (f_df, left_on='Date', right_on='Date', how='inner')
+df.to_csv ('data_all.csv', index=False)
 
 #import pdb; pdb.set_trace ()
 if NA_FILL_VAL:
@@ -122,7 +152,7 @@ if NA_FILL_VAL:
 else:
         df = df.fillna (df.mean ())
 
-df = df.drop (['Date', 'next_qtr', 'prev_qtr'], axis=1)
+#df = df.drop (['Date', 'next_qtr', 'prev_qtr'], axis=1)
 
 X_train = df [(df ['Seq'] >= 10958) & (df ['Seq'] < 23376)] [features]
 X_val = df [(df ['Seq'] >= 23376) & (df ['Seq'] < 24106) ] [features]
@@ -153,19 +183,13 @@ max_leaf_nodes_range = np.arange (2, 100, 30)
 param_grid = {'max_leaf_nodes': max_leaf_nodes_range}
 mdl2 = GridSearchCV (RandomForestRegressor (n_estimators=500, verbose=0, warm_start=False), param_grid=param_grid)
 '''
+import pdb; pdb.set_trace ()
+zzz = 0
+
 mdl2 = RandomForestRegressor (n_estimators=500, max_leaf_nodes=10)
 '''
             max_features=0.3, max_depth=30, min_samples_split=7, \
             min_samples_leaf=4)
 '''
-mdl2.fit (X_train, y_train)
 
-train_preds2 = mdl2.predict (X_train)
-val_preds2 = mdl2.predict (X_val)
-test_preds2 = mdl2.predict (X_test)
-
-summarize (y_train, train_preds2, 'Training')
-summarize (y_val, val_preds2, 'Vallidation')
-summarize (y_test, test_preds2, 'Test')
-
-import pdb; pdb.set_trace ()
+#import pdb; pdb.set_trace ()
