@@ -1,3 +1,4 @@
+import _pickle as cPickle
 import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -22,7 +23,13 @@ def summarize (y_act, y_pred, info):
         print (info + 'MAD: ' + str (np.mean (np.fabs(y_act-y_pred))))
 
 def eval (mdl2):
-        mdl2.fit (X_train, y_train)
+        if os.path.isfile ('rf.mdl'):
+            with open ('rf.mdl', 'rb') as f:
+                mdl2 = cPickle.load (f)
+        else:
+            mdl2.fit (X_train, y_train)
+            with open ('rf.mdl', 'wb') as f:
+                cPickle.dump (mdl2, f)
 
         train_preds2 = mdl2.predict (X_train)
         val_preds2 = mdl2.predict (X_val)
@@ -31,23 +38,32 @@ def eval (mdl2):
         summarize (y_train, train_preds2, 'Training')
         summarize (y_val, val_preds2, 'Validation')
         summarize (y_test, test_preds2, 'Test')
+        return mdl2
 
-def benchmark (mdl, features):
+def benchmark (mdl, features, df):
         bm_df = pd.read_csv ('benchmark_inputs.csv')
+        bm_df ['Date'] = bm_df ['Date'].apply (datetime.datetime.strptime, args=(DATE_FMT,))
+        bm_df ['TargetPeriodDate'] = bm_df ['TargetPeriodDate'].apply (datetime.datetime.strptime, args=(DATE_FMT,))
+        bm_df = bm_df [(bm_df ['Date'] <= bm_df ['TargetPeriodDate'])]
+        bm_df = pd.merge (bm_df, df, on='Date')
         y_preds = mdl.predict (bm_df [features])
         y_acts = bm_df ['gdp_label']
-        ny_fed = bm_df ['ny_fed_nowcast']
+        ny_fed = bm_df ['ny_fed']
 
-        summarize (y_preds, y_act, 'Benchmarking - Our model vs Actual')
-        summarize (ny_fed, y_act, 'Benchmarking - NY Fed vs Actual')
+        summarize (y_preds, y_acts, 'Benchmarking - Our model vs Actual')
+        summarize (ny_fed, y_acts, 'Benchmarking - NY Fed vs Actual')
 
-        x = range (bm_df.shape [0])
+        #x = range (bm_df.shape [0])
+        x = bm_df ['Date']
         fig = plt.figure ()
-        ax1 = fig.add_subplot (len (x))
-        ax1.scatter (x, y_acts, s=10, marker='s', label='Official')
-        ax1.scatter (x, y_preds, s=10, marker='o', label='Our Model')
-        ax1.scatter (x, ny_fed, s=10, marker='t', label='NY Fed')
-        plt.legend(loc='upper left');
+        ax1 = fig.add_subplot (111, xlabel='Projection Dates', ylabel='Annualized QoQ GDP growth', title='Model comparison with NY Fed Reserve Nowcasts')
+        ax1.scatter (x, y_acts, s=40, marker='s', label='Official')
+        ax1.scatter (x, y_preds, s=40, marker='o', label='Our Model')
+        ax1.scatter (x, ny_fed, s=40, marker='v', label='NY Fed')
+        for item in ([ax1.title, ax1.xaxis.label, ax1.yaxis.label] +
+                ax1.get_xticklabels() + ax1.get_yticklabels()):
+             item.set_fontsize(20)
+        plt.legend(loc='lower right');
         plt.show()
         #benchmark_df ['Value'] = np.asfarray (benchmark_df ['Value'])
         
@@ -69,7 +85,7 @@ y_train = df [(df ['Seq'] >= 10958) & (df ['Seq'] < 23376)] ['gdp_label']
 y_val = df [(df ['Seq'] >= 23376) & (df ['Seq'] < 24106) ] ['gdp_label']
 y_test = df [(df ['Seq'] >= 24106) & (df ['Seq'] < 24838) ] ['gdp_label']
 
-'''
+
 ts = ['GTII10 Govt','DXY Curncy','VIX Index','SPX Index','DOW US Equity','NDX Index', \
         'AUDUSD Curncy', 'USDCAD Curncy' ,'USDJPY Curncy', 'GBPUSD Curncy', 'USDMXN Curncy','USDCNY Curncy', \
         'USGG10YR Index', 'FDTR Index', 'MPMIUSMA Index', 'NAPMPMI Index', 'NAPMPRIC Index', \
@@ -112,7 +128,7 @@ ts = ['SPX Index', 'DXY Curncy', 'DOW US Equity', 'AUDUSD Curncy', 'USDCAD Curnc
      ]
 
 
-'''
+
 ts = [
                 'GTII10 Govt'
                 ]
@@ -126,6 +142,7 @@ features = [
 f_cols = {}
 
 for s in ts:
+        features.append (s)
         df [s + suffix] = np.nan
         features.append (s + suffix)
         f_cols [s + suffix] = []
@@ -206,6 +223,9 @@ X_train = df [(df ['Seq'] >= 10958) & (df ['Seq'] < 23376)] [features]
 X_val = df [(df ['Seq'] >= 23376) & (df ['Seq'] < 24106) ] [features]
 X_test = df [(df ['Seq'] >= 24106) & (df ['Seq'] < 24838) ] [features]
 
+mdl = RandomForestRegressor (n_estimators=500, max_features=30)
+mdl = eval (mdl)
+benchmark (mdl, features, df)
 '''
 X_train = X_train.drop (['Seq', 'gdp_label'], axis=1)
 X_val = X_val.drop (['Seq', 'gdp_label'], axis=1)
@@ -224,17 +244,14 @@ summarize (y_train, train_preds, 'Training')
 summarize (y_val, val_preds, 'Vallidation')
 summarize (y_test, test_preds, 'Test')
 '''
-print ("---------- Regularized below ----------")
+#print ("---------- Regularized below ----------")
 #import pdb; pdb.set_trace ()
 '''
 max_leaf_nodes_range = np.arange (2, 100, 30)
 param_grid = {'max_leaf_nodes': max_leaf_nodes_range}
 mdl2 = GridSearchCV (RandomForestRegressor (n_estimators=500, verbose=0, warm_start=False), param_grid=param_grid)
 '''
-import pdb; pdb.set_trace ()
-zzz = 0
 
-mdl2 = RandomForestRegressor (n_estimators=500, max_leaf_nodes=10)
 '''
             max_features=0.3, max_depth=30, min_samples_split=7, \
             min_samples_leaf=4)
