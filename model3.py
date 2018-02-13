@@ -23,13 +23,15 @@ def summarize (y_act, y_pred, info):
         print (info + '. MAD: ' + str (np.mean (np.fabs(y_act-y_pred))))
 
 def eval (mdl2):
-        if False and os.path.isfile ('rf.mdl'):
+        if os.path.isfile ('rf.mdl'):
             with open ('rf.mdl', 'rb') as f:
                 mdl2 = cPickle.load (f)
         else:
             mdl2.fit (X_train, y_train)
             with open ('rf.mdl', 'wb') as f:
                 cPickle.dump (mdl2, f)
+
+        import pdb; pdb.set_trace ()
 
         train_preds2 = mdl2.predict (X_train)
         val_preds2 = mdl2.predict (X_val)
@@ -110,7 +112,6 @@ ts = ['GTII10 Govt','DXY Curncy','VIX Index','SPX Index','DOW US Equity','NDX In
         'GDP PIQQ Index', 'GDPCPCEC Index', 'PITLCHNG Index', 'PCE CRCH Index', 'PCE CHNC Index', \
         'PCE DEFM Index', 'PCE DEFY Index', 'PCE CMOM Index', 'PCE CYOY Index', 'DFEDGBA Index', \
         'ECI SA% Index', 'SPCS20SM Index', 'SPCS20Y% Index', 'CHPMINDX Index', 'CONCCONF Index']
-
 '''
 
 ts = ['SPX Index', 'DXY Curncy', 'DOW US Equity', 'AUDUSD Curncy', 'USDCAD Curncy', \
@@ -135,9 +136,6 @@ ts = [
                 ]
 
 '''
-#ts = ['CPTICHNG Index', 'USURTOT Index', 'INJCSP Index', 'INJCJC Index', 'DOW US Equity']
-
-
 features = [
                         'EHGDUS Index',
                         'days_to_go',
@@ -146,13 +144,13 @@ features = [
 f_cols = {}
 
 for s in ts:
-        #features.append (s)
+        features.append (s)
         df [s + suffix] = np.nan
         features.append (s + suffix)
         f_cols [s + suffix] = []
         df [s + suffix2] = np.nan
-        #features.append (s + suffix2)
-        #f_cols [s + suffix2] = []
+        features.append (s + suffix2)
+        f_cols [s + suffix2] = []
 
 for s in ts:
         f_cols ['Date'] = []
@@ -227,23 +225,15 @@ X_train = df [(df ['Seq'] >= 10958) & (df ['Seq'] < 23376)] [features]
 X_val = df [(df ['Seq'] >= 23376) & (df ['Seq'] < 24106) ] [features]
 X_test = df [(df ['Seq'] >= 24106) & (df ['Seq'] < 24838) ] [features]
 
-
-'''
 max_leaf_nodes = np.arange (2, 60, 10)
 min_weight_fraction_leaf = np.arange (0,0.1,0.01)
 max_features = np.arange (10, 80, 5)
 max_depth = np.arange (2, 30, 5)
 param_grid = dict (max_leaf_nodes=max_leaf_nodes, min_weight_fraction_leaf=min_weight_fraction_leaf, max_features=max_features, max_depth=max_depth)
 mdl = GridSearchCV (RandomForestRegressor (n_estimators=100, random_state=1), param_grid=param_grid)
-'''
-mdl = RandomForestRegressor (n_estimators=500, random_state=3, max_leaf_nodes=35, max_features=20, max_depth=9, min_samples_split=300, min_samples_leaf=100)
-#mdl = RandomForestRegressor (n_estimators=500, random_state=3, max_leaf_nodes=35, max_depth=9, min_samples_split=300, min_samples_leaf=100)
+#mdl = RandomForestRegressor (n_estimators=200, random_state=2, min_weight_fraction_leaf=0.035)
 mdl = eval (mdl)
 benchmark (mdl, features, df)
-#import pdb; pdb.set_trace ()
-for i in range (len (features)):
-    print (features [i] + " - " + str (mdl.feature_importances_ [i]))
-
 '''
 X_train = X_train.drop (['Seq', 'gdp_label'], axis=1)
 X_val = X_val.drop (['Seq', 'gdp_label'], axis=1)
