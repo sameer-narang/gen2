@@ -23,7 +23,7 @@ def summarize (y_act, y_pred, info):
         print (info + '. MAD: ' + str (np.mean (np.fabs(y_act-y_pred))))
 
 def eval (mdl2):
-        if False and os.path.isfile ('rf.mdl'):
+        if os.path.isfile ('rf.mdl'):
             with open ('rf.mdl', 'rb') as f:
                 mdl2 = cPickle.load (f)
         else:
@@ -44,7 +44,10 @@ def benchmark (mdl, features, df):
         bm_df = pd.read_csv ('benchmark_inputs.csv')
         bm_df ['Date'] = bm_df ['Date'].apply (datetime.datetime.strptime, args=(DATE_FMT,))
         bm_df ['TargetPeriodDate'] = bm_df ['TargetPeriodDate'].apply (datetime.datetime.strptime, args=(DATE_FMT,))
-        bm_df = bm_df [(bm_df ['Date'] <= bm_df ['TargetPeriodDate'])]
+        #bm_df = bm_df [(bm_df ['Date'] <= bm_df ['TargetPeriodDate'])]
+        bm_df = bm_df.reset_index ()
+        #bm_df = bm_df [(bm_df ['Date'].month == bm_df ['TargetPeriodDate'].month)]
+        import pdb; pdb.set_trace ()
         bm_df = pd.merge (bm_df, df, on='Date')
         y_preds = mdl.predict (bm_df [features])
         y_acts = bm_df ['gdp_label']
@@ -64,7 +67,7 @@ def benchmark (mdl, features, df):
                 ax1.get_xticklabels() + ax1.get_yticklabels()):
              item.set_fontsize(20)
         plt.legend(loc='lower right');
-        ##plt.show()
+        plt.show()
         #benchmark_df ['Value'] = np.asfarray (benchmark_df ['Value'])
         
 
